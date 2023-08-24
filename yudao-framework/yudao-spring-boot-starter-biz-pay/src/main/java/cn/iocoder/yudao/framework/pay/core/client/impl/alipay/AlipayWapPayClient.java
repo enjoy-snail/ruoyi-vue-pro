@@ -1,70 +1,59 @@
 package cn.iocoder.yudao.framework.pay.core.client.impl.alipay;
 
-import cn.hutool.core.bean.BeanUtil;
-import cn.iocoder.yudao.framework.pay.core.client.PayCommonResult;
-import cn.iocoder.yudao.framework.pay.core.client.dto.PayOrderNotifyRespDTO;
-import cn.iocoder.yudao.framework.pay.core.client.dto.PayOrderUnifiedReqDTO;
-import cn.iocoder.yudao.framework.pay.core.client.impl.AbstractPayClient;
-import cn.iocoder.yudao.framework.pay.core.enums.PayChannelEnum;
+import cn.hutool.http.Method;
+import cn.iocoder.yudao.framework.pay.core.client.dto.order.PayOrderRespDTO;
+import cn.iocoder.yudao.framework.pay.core.client.dto.order.PayOrderUnifiedReqDTO;
+import cn.iocoder.yudao.framework.pay.core.enums.channel.PayChannelEnum;
+import cn.iocoder.yudao.framework.pay.core.enums.order.PayOrderDisplayModeEnum;
 import com.alipay.api.AlipayApiException;
-import com.alipay.api.AlipayConfig;
-import com.alipay.api.DefaultAlipayClient;
 import com.alipay.api.domain.AlipayTradeWapPayModel;
 import com.alipay.api.request.AlipayTradeWapPayRequest;
 import com.alipay.api.response.AlipayTradeWapPayResponse;
-import lombok.SneakyThrows;
+import lombok.extern.slf4j.Slf4j;
 
 /**
- * 支付宝【手机网站】的 PayClient 实现类
- * 文档：https://opendocs.alipay.com/apis/api_1/alipay.trade.wap.pay
+ * 支付宝【Wap 网站】的 PayClient 实现类
+ *
+ * 文档：<a href="https://opendocs.alipay.com/apis/api_1/alipay.trade.wap.pay">手机网站支付接口</a>
  *
  * @author 芋道源码
  */
-public class AlipayWapPayClient extends AbstractPayClient<AlipayPayClientConfig> {
-
-    private DefaultAlipayClient client;
+@Slf4j
+public class AlipayWapPayClient extends AbstractAlipayPayClient {
 
     public AlipayWapPayClient(Long channelId, AlipayPayClientConfig config) {
-        super(channelId, PayChannelEnum.ALIPAY_WAP.getCode(), config, new AlipayPayCodeMapping());
+        super(channelId, PayChannelEnum.ALIPAY_WAP.getCode(), config);
     }
 
     @Override
-    @SneakyThrows
-    protected void doInit() {
-        AlipayConfig alipayConfig = new AlipayConfig();
-        BeanUtil.copyProperties(config, alipayConfig, false);
-        this.client = new DefaultAlipayClient(alipayConfig);
-    }
-
-    @Override
-    public PayCommonResult<AlipayTradeWapPayResponse> doUnifiedOrder(PayOrderUnifiedReqDTO reqDTO) {
-        // 构建 AlipayTradeWapPayModel 请求
+    public PayOrderRespDTO doUnifiedOrder(PayOrderUnifiedReqDTO reqDTO) throws AlipayApiException {
+        // 1.1 构建 AlipayTradeWapPayModel 请求
         AlipayTradeWapPayModel model = new AlipayTradeWapPayModel();
-        model.setOutTradeNo(reqDTO.getMerchantOrderId());
+        // ① 通用的参数
+        model.setOutTradeNo(reqDTO.getOutTradeNo());
         model.setSubject(reqDTO.getSubject());
         model.setBody(reqDTO.getBody());
-        model.setTotalAmount(calculateAmount(reqDTO.getAmount()).toString());
-        model.setProductCode("QUICK_WAP_PAY"); // TODO 芋艿：这里咋整
-        model.setSellerId("2088102147948060"); // TODO 芋艿：这里咋整
-        // TODO 芋艿：userIp + expireTime
-        // 构建 AlipayTradeWapPayRequest
+        model.setTotalAmount(formatAmount(reqDTO.getPrice()));
+        model.setProductCode("QUICK_WAP_PAY"); // 销售产品码. 目前 Wap 支付场景下仅支持 QUICK_WAP_PAY
+        // ② 个性化的参数【无】
+        // ③ 支付宝 Wap 支付只有一种展示：URL
+        String displayMode = PayOrderDisplayModeEnum.URL.getMode();
+
+        // 1.2 构建 AlipayTradeWapPayRequest 请求
         AlipayTradeWapPayRequest request = new AlipayTradeWapPayRequest();
         request.setBizModel(model);
+        request.setNotifyUrl(reqDTO.getNotifyUrl());
+        request.setReturnUrl(reqDTO.getReturnUrl());
+        model.setQuitUrl(reqDTO.getReturnUrl());
 
-        // 执行请求
-        AlipayTradeWapPayResponse response;
-        try {
-            response = client.pageExecute(request);
-        } catch (AlipayApiException e) {
-            return PayCommonResult.build(e.getErrCode(), e.getErrMsg(), null, codeMapping);
+        // 2.1 执行请求
+        AlipayTradeWapPayResponse response = client.pageExecute(request, Method.GET.name());
+        // 2.2 处理结果
+        if (!response.isSuccess()) {
+            return buildClosedPayOrderRespDTO(reqDTO, response);
         }
-//         TODO 芋艿：sub Code
-        return PayCommonResult.build(response.getCode(), response.getMsg(), response, codeMapping);
+        return PayOrderRespDTO.waitingOf(displayMode, response.getBody(),
+                reqDTO.getOutTradeNo(), response);
     }
 
-    @Override
-    public PayOrderNotifyRespDTO parseOrderNotify(String data) throws Exception {
-        // TODO 芋艿：待完成
-        return null;
-    }
 }

@@ -1,7 +1,11 @@
 package cn.iocoder.yudao.framework.pay.core.client;
 
-import cn.iocoder.yudao.framework.pay.core.client.dto.PayOrderNotifyRespDTO;
-import cn.iocoder.yudao.framework.pay.core.client.dto.PayOrderUnifiedReqDTO;
+import cn.iocoder.yudao.framework.pay.core.client.dto.order.PayOrderRespDTO;
+import cn.iocoder.yudao.framework.pay.core.client.dto.order.PayOrderUnifiedReqDTO;
+import cn.iocoder.yudao.framework.pay.core.client.dto.refund.PayRefundRespDTO;
+import cn.iocoder.yudao.framework.pay.core.client.dto.refund.PayRefundUnifiedReqDTO;
+
+import java.util.Map;
 
 /**
  * 支付客户端，用于对接各支付渠道的 SDK，实现发起支付、退款等功能
@@ -17,21 +21,59 @@ public interface PayClient {
      */
     Long getId();
 
+    // ============ 支付相关 ==========
+
     /**
      * 调用支付渠道，统一下单
      *
      * @param reqDTO 下单信息
-     * @return 各支付渠道的返回结果
+     * @return 支付订单信息
      */
-    PayCommonResult<?> unifiedOrder(PayOrderUnifiedReqDTO reqDTO);
+    PayOrderRespDTO unifiedOrder(PayOrderUnifiedReqDTO reqDTO);
 
     /**
-     * 解析支付单的通知结果
+     * 解析 order 回调数据
      *
-     * @param data 通知结果
-     * @return 解析结果
-     * @throws Exception 解析失败，抛出异常
+     * @param params HTTP 回调接口 content type 为 application/x-www-form-urlencoded 的所有参数
+     * @param body HTTP 回调接口的 request body
+     * @return 支付订单信息
      */
-    PayOrderNotifyRespDTO parseOrderNotify(String data) throws Exception;
+    PayOrderRespDTO parseOrderNotify(Map<String, String> params, String body);
+
+    /**
+     * 获得支付订单信息
+     *
+     * @param outTradeNo 外部订单号
+     * @return 支付订单信息
+     */
+    PayOrderRespDTO getOrder(String outTradeNo);
+
+    // ============ 退款相关 ==========
+
+    /**
+     * 调用支付渠道，进行退款
+     *
+     * @param reqDTO  统一退款请求信息
+     * @return 退款信息
+     */
+    PayRefundRespDTO unifiedRefund(PayRefundUnifiedReqDTO reqDTO);
+
+    /**
+     * 解析 refund 回调数据
+     *
+     * @param params HTTP 回调接口 content type 为 application/x-www-form-urlencoded 的所有参数
+     * @param body HTTP 回调接口的 request body
+     * @return 支付订单信息
+     */
+    PayRefundRespDTO parseRefundNotify(Map<String, String> params, String body);
+
+    /**
+     * 获得退款订单信息
+     *
+     * @param outTradeNo 外部订单号
+     * @param outRefundNo 外部退款号
+     * @return 退款订单信息
+     */
+    PayRefundRespDTO getRefund(String outTradeNo, String outRefundNo);
 
 }
